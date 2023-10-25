@@ -28,6 +28,8 @@ class read_dat(object):
         self.selection = [[], []]
         self.cuts = []
 
+        self.cuts_output_name = ''
+
         print('init complete')
 
     
@@ -194,7 +196,7 @@ class read_dat(object):
         return t_diff_samples
 
 
-    def draw_polygons(self, L, S, lims=None):
+    def draw_polygons(self, L, S, output_file_name, lims=None):
         """Plots all supplied L and S points and allows for creation of polygons that can be used to cut out (or in) certain points. Returns nothing but "o" should be pressed after creation of the polygons to get a file out the other end.
 
             Args
@@ -204,10 +206,15 @@ class read_dat(object):
 
             S : (array, float)
                 Array of S values to be plotted
+            
+            output_file_name : (str)
+                Name of the file to output the polygon coordinates to
 
             lims : (tuple (2x2), optional)
                 Tuple containing the x- and y-lims for the plot. If None, uses the automatic limits determined by pyplot. Defaults to None.
         """
+
+        self.cuts_output_name = output_file_name
 
         fig = plt.figure()
         if lims == None:
@@ -259,7 +266,10 @@ class read_dat(object):
         for c in range(len(polygons_x)):
             polygons.append(pat.Polygon(np.transpose([polygons_x[c], polygons_y[c]])))
 
-        return polygons
+        if len(polygons) == 1:
+            return polygons[0]
+        else:
+            return polygons
 
 
 ##################################################################################################################################################
@@ -349,7 +359,7 @@ class read_dat(object):
             indices = np.cumsum(self.cuts)
             split = np.split(self.selection, indices, axis=1)[:-1]
             
-            with open(f'{self.filename[:-4]}_cuts.csv', 'w', newline='') as f:
+            with open(f'{self.cuts_output_name}.csv', 'w', newline='') as f:
             # create the csv writer
                 writer = csv.writer(f)
 
