@@ -156,7 +156,7 @@ class read_dat(object):
 
         The interpolated positions are used to determine the time difference in order to avoid an artefact of subtracting integers from integers. 
 
-        The frequency (in MHz) and height of the pulses (in bits) need to be supplied in order to best select the peaks in the stop pulse trace.
+        The time between stop pulses (in samples) and height of the pulses (in bits) need to be supplied in order to best select the peaks in the stop pulse trace.
 
         CFD parameters can also be supplied but will default to whatever I've found to be optimal in my work :)
 
