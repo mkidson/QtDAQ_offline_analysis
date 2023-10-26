@@ -43,6 +43,9 @@ class read_dat(object):
         self.end_file = False
 
 
+    def get_end_of_file(self):
+        return self.end_file
+
     def read_event(self, baseline_samples, raw_traces=False):
         """Reads every active channel and returns the traces after the baseline has been subtracted and the polarity checked to make it positive-going. Optionally returns the traces before any processing. Takes the number of samples used to determine the baseline as an input.
 
