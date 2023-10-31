@@ -4,6 +4,7 @@ import matplotlib.colors as colors
 import matplotlib.pyplot as plt 
 import matplotlib.patches as pat
 import csv
+import numpy as np
 
 
 
