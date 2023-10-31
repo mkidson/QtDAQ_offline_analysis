@@ -1,12 +1,10 @@
-from scipy import signal
 from scipy.signal import find_peaks
-from event import *
 import matplotlib.cm as cm
 import matplotlib.colors as colors
 import matplotlib.pyplot as plt 
 import matplotlib.patches as pat
-from scipy.interpolate import interp1d
 import csv
+import numpy as np
 
 
 
