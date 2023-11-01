@@ -63,6 +63,7 @@ class read_dat(object):
         # Reads the preamble that sits at the front of each event
         preamble = np.frombuffer(self.input_file.read(self.preamble_size), dtype=np.uint32)
         if not preamble.any(): # Checks end of file
+            self.input_file.close()
             self.end_file = True
             return self.end_file
         
