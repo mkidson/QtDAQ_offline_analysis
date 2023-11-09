@@ -189,10 +189,10 @@ class read_dat(object):
         # Frequency and height are modified for more optimal peak finding. If they're exact, it doesn't work as well.
         peaks = find_peaks(tof_stop_trace, distance=stop_distance-50, height=stop_height-500)
 
-        if len(peaks) == 0:
+        try:
+            tof_stop_trace_for_cfd = tof_stop_trace[peaks[0][-1]-50:peaks[0][-1]+50]
+        except IndexError:
             return 0
-
-        tof_stop_trace_for_cfd = tof_stop_trace[peaks[0][-1]-50:peaks[0][-1]+50]
 
         tof_stop_cfd_interp = self.cfd(tof_stop_trace_for_cfd, *cfd_params)[2] + peaks[0][-1] - 50
 
