@@ -39,6 +39,9 @@ class read_dat(object):
         self.input_file = open(self.filename, 'rb')
         self.header = self.input_file.read(self.header_size)
         self.end_file = False
+    
+    def close_input_file(self):
+        self.input_file.close()
 
 
     def get_end_of_file(self):
