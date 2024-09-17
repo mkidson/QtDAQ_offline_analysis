@@ -39,6 +39,9 @@ class read_dat(object):
         self.input_file = open(self.filename, 'rb')
         self.header = self.input_file.read(self.header_size)
         self.end_file = False
+    
+    def close_input_file(self):
+        self.input_file.close()
 
 
     def get_end_of_file(self):
@@ -63,6 +66,7 @@ class read_dat(object):
         # Reads the preamble that sits at the front of each event
         preamble = np.frombuffer(self.input_file.read(self.preamble_size), dtype=np.uint32)
         if not preamble.any(): # Checks end of file
+            self.input_file.close()
             self.end_file = True
             return self.end_file
         
@@ -188,7 +192,10 @@ class read_dat(object):
         # Frequency and height are modified for more optimal peak finding. If they're exact, it doesn't work as well.
         peaks = find_peaks(tof_stop_trace, distance=stop_distance-50, height=stop_height-500)
 
-        tof_stop_trace_for_cfd = tof_stop_trace[peaks[0][-1]-50:peaks[0][-1]+50]
+        try:
+            tof_stop_trace_for_cfd = tof_stop_trace[peaks[0][-1]-50:peaks[0][-1]+50]
+        except IndexError:
+            return 0
 
         tof_stop_cfd_interp = self.cfd(tof_stop_trace_for_cfd, *cfd_params)[2] + peaks[0][-1] - 50
 
