@@ -1,4 +1,5 @@
 from scipy.signal import find_peaks
+from scipy.stats import linregress
 import matplotlib.cm as cm
 import matplotlib.colors as colors
 import matplotlib.pyplot as plt 
@@ -187,7 +188,7 @@ class read_dat(object):
             t_diff_samples : (float)
                 Difference in time (in samples) between the CFD zero-crossing points of the stop pulse and the signal trace.
         """
-        trace_cfd_interp = self.cfd(trace, *cfd_params)[2]
+        trace_cfd_interp = self.cfd(trace, cfd_params[0], cfd_params[1], True)[2]
 
         # Frequency and height are modified for more optimal peak finding. If they're exact, it doesn't work as well.
         peaks = find_peaks(tof_stop_trace, distance=stop_distance-50, height=stop_height-500)
@@ -197,7 +198,7 @@ class read_dat(object):
         except IndexError:
             return 0
 
-        tof_stop_cfd_interp = self.cfd(tof_stop_trace_for_cfd, *cfd_params)[2] + peaks[0][-1] - 50
+        tof_stop_cfd_interp = self.cfd(tof_stop_trace_for_cfd, cfd_params[0], cfd_params[1], True)[2] + peaks[0][-1] - 50
 
         t_diff_samples = tof_stop_cfd_interp - trace_cfd_interp
 
@@ -381,7 +382,7 @@ class read_dat(object):
         return
 
 
-    def cfd(self, trace, frac, offset):
+    def cfd(self, trace, frac, offset, interp=False):
         """Determines the zero-crossing point of the CFD of a trace. Returns the trace after CFD is done to it, the sample point just before the crossing, and then a point determined with linear interpolation to get as close as possible to the point.
 
             Args
@@ -394,6 +395,9 @@ class read_dat(object):
 
             offset : (int)
                 Number of samples to shift the secondary trace by before subtracting it.
+
+            interp : (bool, optional)
+                Determines whether the function returns the interpolated position of the zero cross as well as the sample. Defaults to `False`
 
             Returns
             -------
@@ -429,13 +433,22 @@ class read_dat(object):
             # should be the crossing event. We then get the index of that point
             zero_cross_index = cfd_array_max_index + np.where( np.diff( np.sign( cfd_array[cfd_array_max_index:cfd_array_min_index] ) ) != 0 )[0][0]
 
-            zero_cross_interp = (0 - cfd_array[zero_cross_index]) * ( 1 / (cfd_array[zero_cross_index+1] - cfd_array[zero_cross_index]) ) + zero_cross_index
+            if interp:
+                interp_fit = linregress([zero_cross_index-2,zero_cross_index-1,zero_cross_index,zero_cross_index+1,zero_cross_index+2], cfd_array[zero_cross_index-2:zero_cross_index+3])
+
+                zero_cross_interp = ((0 - interp_fit.intercept) / interp_fit.slope)
 
         except Exception as err:   # This used to only except IndexError but I think this is more general
             # print(err)
             # self.fails[4] = 1
-            return cfd_array, -1, -1
+            if interp:
+                return cfd_array, -1, -1
+            else: 
+                return cfd_array, -1
 
 
-        return cfd_array, zero_cross_index, zero_cross_interp
+        if interp:
+            return cfd_array, zero_cross_index, zero_cross_interp
+        else:
+            return cfd_array, zero_cross_index
 
