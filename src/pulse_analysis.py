@@ -40,6 +40,7 @@ class read_dat(object):
         self.input_file = open(self.filename, 'rb')
         self.header = self.input_file.read(self.header_size)
         self.end_file = False
+        self.event_time_stamp = 0.0
     
     def close_input_file(self):
         self.input_file.close()
@@ -63,14 +64,18 @@ class read_dat(object):
             -------
             traces : (array)
                 Array of traces from each channel, in order. If any channels in between are not used (e.g. we use 0, 1, and 3), then the array will get flattened so there are only `n` elements, where `n` is the number of active channels.
+            
+            time_stamp : (int)
+                Time in microseconds since the start of the acquisistion
         """
         # Reads the preamble that sits at the front of each event
         preamble = np.frombuffer(self.input_file.read(self.preamble_size), dtype=np.uint32)
         if not preamble.any(): # Checks end of file
             self.input_file.close()
             self.end_file = True
-            return self.end_file
+            return self.end_file, 0
         
+        self.event_time_stamp = preamble[5]*8e-3    # in us
         # Array of all channels. 0 if that channel isn't active, int value being equal to the number of samples in that active channel
         self.channel_sizes = preamble[6:]
         # Array of active channel numbers, starting from 0
@@ -94,9 +99,9 @@ class read_dat(object):
                 traces[i] = trace_to_append
         
         if raw_traces:
-            return traces_raw
+            return traces_raw, self.event_time_stamp
         else:
-            return traces
+            return traces, self.event_time_stamp
 
 
     def calculate_integrals(self, trace, align_point, t_start, t_short, t_long):
