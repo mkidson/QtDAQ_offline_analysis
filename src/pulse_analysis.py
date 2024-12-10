@@ -439,7 +439,7 @@ class read_dat(object):
             zero_cross_index = cfd_array_max_index + np.where( np.diff( np.sign( cfd_array[cfd_array_max_index:cfd_array_min_index] ) ) != 0 )[0][0]
 
             if interp:
-                interp_fit = linregress([zero_cross_index-2,zero_cross_index-1,zero_cross_index,zero_cross_index+1,zero_cross_index+2], cfd_array[zero_cross_index-2:zero_cross_index+3])
+                interp_fit = linregress([zero_cross_index+c for c in np.arange(-1,3,1)], cfd_array[zero_cross_index-1:zero_cross_index+3])
 
                 zero_cross_interp = ((0 - interp_fit.intercept) / interp_fit.slope)
 
