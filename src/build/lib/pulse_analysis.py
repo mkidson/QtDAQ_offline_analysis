@@ -1,4 +1,5 @@
 from scipy.signal import find_peaks
+from scipy.stats import linregress
 import matplotlib.cm as cm
 import matplotlib.colors as colors
 import matplotlib.pyplot as plt 
@@ -14,13 +15,14 @@ class read_dat(object):
     max_channels = 64
     preamble_size = 4+20+4*max_channels
 
-    def __init__(self, filename):
+    def __init__(self, filename, ns_per_sample=2):
         self.filename = filename
         self.input_file = open(self.filename, 'rb')
         self.header = self.input_file.read(self.header_size)
         self.end_file = False
         self.event_counter = 0
         self.active_channels = []
+        self.ns_per_sample = ns_per_sample
 
         # These two exist 
         self.selection = [[], []]
@@ -39,6 +41,7 @@ class read_dat(object):
         self.input_file = open(self.filename, 'rb')
         self.header = self.input_file.read(self.header_size)
         self.end_file = False
+        self.event_time_stamp = 0.0
     
     def close_input_file(self):
         self.input_file.close()
@@ -47,13 +50,13 @@ class read_dat(object):
     def get_end_of_file(self):
         return self.end_file
 
-    def read_event(self, baseline_samples, raw_traces=False):
+    def read_event(self, baseline_time, raw_traces=False):
         """Reads every active channel and returns the traces after the baseline has been subtracted and the polarity checked to make it positive-going. Optionally returns the traces before any processing. Takes the number of samples used to determine the baseline as an input.
 
             Args
             ----
-            baseline_samples : (int)
-                Number of samples used to calculate the baseline of a pulse at the start of the acquisition window. 
+            baseline_time : (int)
+                Length of time used (in ns) to calculate the baseline of a pulse at the start of the acquisition window. 
 
             raw_traces : (bool, optional)
                 Flag that determines if the traces before any processing should be returned to the user instead of the processed ones. Defaults to False.
@@ -62,20 +65,30 @@ class read_dat(object):
             -------
             traces : (array)
                 Array of traces from each channel, in order. If any channels in between are not used (e.g. we use 0, 1, and 3), then the array will get flattened so there are only `n` elements, where `n` is the number of active channels.
+            
+            time_stamp : (int)
+                Time in microseconds since the start of the acquisistion
         """
+        # Calculates number of samples needed to calculate the baseline
+        baseline_samples = int(baseline_time / self.ns_per_sample)
+
         # Reads the preamble that sits at the front of each event
         preamble = np.frombuffer(self.input_file.read(self.preamble_size), dtype=np.uint32)
         if not preamble.any(): # Checks end of file
             self.input_file.close()
             self.end_file = True
-            return self.end_file
+            return self.end_file, 0
         
+        self.event_time_stamp = preamble[5]*8e-3    # in us
         # Array of all channels. 0 if that channel isn't active, int value being equal to the number of samples in that active channel
         self.channel_sizes = preamble[6:]
         # Array of active channel numbers, starting from 0
         self.active_channels = np.argwhere(self.channel_sizes > 0).flatten()
 
         traces_raw = np.empty((len(self.active_channels), self.channel_sizes[self.active_channels[0]]))
+
+        trace_t = np.arange(0, len(traces_raw), self.ns_per_sample)
+
         # Gets the raw trace as it comes out of the detector. y-axis is in bits and x-axis is in samples
         for i in range(len(self.active_channels)):
             traces_raw[i] = np.array(np.frombuffer(self.input_file.read(self.channel_sizes[self.active_channels[i]]*2), dtype=np.uint16), dtype=int)
@@ -93,9 +106,9 @@ class read_dat(object):
                 traces[i] = trace_to_append
         
         if raw_traces:
-            return traces_raw
+            return traces_raw, trace_t, self.event_time_stamp
         else:
-            return traces
+            return traces, trace_t, self.event_time_stamp
 
 
     def calculate_integrals(self, trace, align_point, t_start, t_short, t_long):
@@ -110,13 +123,13 @@ class read_dat(object):
                 Sample number that the integration window will be determined relative to.
 
             t_start : (int)
-                Number of samples before the `align_point` where the integration window will start.
+                Time before the `align_point` where the integration window will start.
 
             t_short : (int)
-                Number of samples after the `align_point` that the short integration window will end.
+                Time after the `align_point` that the short integration window will end.
 
             t_long : (int)
-                Number of samples after the `align_point` that the long integration window will end.
+                Time after the `align_point` that the long integration window will end.
 
             Returns
             -------
@@ -125,8 +138,13 @@ class read_dat(object):
             L : (float)
                 Long integral
         """
-        short_int = np.sum(trace[int(align_point+t_start):int(align_point+t_short)])
-        long_int = np.sum(trace[int(align_point+t_start):int(align_point+t_long)])
+
+        samples_start = t_start / self.ns_per_sample
+        samples_short = t_short / self.ns_per_sample
+        samples_long = t_long / self.ns_per_sample
+
+        short_int = np.sum(trace[int(align_point+samples_start):int(align_point+samples_short)])
+        long_int = np.sum(trace[int(align_point+samples_start):int(align_point+samples_long)])
 
         return short_int, long_int
 
@@ -187,7 +205,7 @@ class read_dat(object):
             t_diff_samples : (float)
                 Difference in time (in samples) between the CFD zero-crossing points of the stop pulse and the signal trace.
         """
-        trace_cfd_interp = self.cfd(trace, *cfd_params)[2]
+        trace_cfd_interp = self.cfd(trace, cfd_params[0], cfd_params[1], True)[2]
 
         # Frequency and height are modified for more optimal peak finding. If they're exact, it doesn't work as well.
         peaks = find_peaks(tof_stop_trace, distance=stop_distance-50, height=stop_height-500)
@@ -197,7 +215,7 @@ class read_dat(object):
         except IndexError:
             return 0
 
-        tof_stop_cfd_interp = self.cfd(tof_stop_trace_for_cfd, *cfd_params)[2] + peaks[0][-1] - 50
+        tof_stop_cfd_interp = self.cfd(tof_stop_trace_for_cfd, cfd_params[0], cfd_params[1], True)[2] + peaks[0][-1] - 50
 
         t_diff_samples = tof_stop_cfd_interp - trace_cfd_interp
 
@@ -381,7 +399,7 @@ class read_dat(object):
         return
 
 
-    def cfd(self, trace, frac, offset):
+    def cfd(self, trace, frac, offset, interp=False):
         """Determines the zero-crossing point of the CFD of a trace. Returns the trace after CFD is done to it, the sample point just before the crossing, and then a point determined with linear interpolation to get as close as possible to the point.
 
             Args
@@ -394,6 +412,9 @@ class read_dat(object):
 
             offset : (int)
                 Number of samples to shift the secondary trace by before subtracting it.
+
+            interp : (bool, optional)
+                Determines whether the function returns the interpolated position of the zero cross as well as the sample. Defaults to `False`
 
             Returns
             -------
@@ -429,13 +450,22 @@ class read_dat(object):
             # should be the crossing event. We then get the index of that point
             zero_cross_index = cfd_array_max_index + np.where( np.diff( np.sign( cfd_array[cfd_array_max_index:cfd_array_min_index] ) ) != 0 )[0][0]
 
-            zero_cross_interp = (0 - cfd_array[zero_cross_index]) * ( 1 / (cfd_array[zero_cross_index+1] - cfd_array[zero_cross_index]) ) + zero_cross_index
+            if interp:
+                interp_fit = linregress([zero_cross_index+c for c in np.arange(-1,3,1)], cfd_array[zero_cross_index-1:zero_cross_index+3])
+
+                zero_cross_interp = ((0 - interp_fit.intercept) / interp_fit.slope)
 
         except Exception as err:   # This used to only except IndexError but I think this is more general
             # print(err)
             # self.fails[4] = 1
-            return cfd_array, -1, -1
+            if interp:
+                return cfd_array, -1, -1
+            else: 
+                return cfd_array, -1
 
 
-        return cfd_array, zero_cross_index, zero_cross_interp
+        if interp:
+            return cfd_array, zero_cross_index, zero_cross_interp
+        else:
+            return cfd_array, zero_cross_index
 

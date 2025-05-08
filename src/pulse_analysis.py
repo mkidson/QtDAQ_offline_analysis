@@ -70,7 +70,7 @@ class read_dat(object):
                 Time in microseconds since the start of the acquisistion
         """
         # Calculates number of samples needed to calculate the baseline
-        baseline_samples = baseline_time / self.ns_per_sample
+        baseline_samples = int(baseline_time / self.ns_per_sample)
 
         # Reads the preamble that sits at the front of each event
         preamble = np.frombuffer(self.input_file.read(self.preamble_size), dtype=np.uint32)
