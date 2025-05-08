@@ -15,13 +15,14 @@ class read_dat(object):
     max_channels = 64
     preamble_size = 4+20+4*max_channels
 
-    def __init__(self, filename):
+    def __init__(self, filename, ns_per_sample=2):
         self.filename = filename
         self.input_file = open(self.filename, 'rb')
         self.header = self.input_file.read(self.header_size)
         self.end_file = False
         self.event_counter = 0
         self.active_channels = []
+        self.ns_per_sample = ns_per_sample
 
         # These two exist 
         self.selection = [[], []]
@@ -49,13 +50,13 @@ class read_dat(object):
     def get_end_of_file(self):
         return self.end_file
 
-    def read_event(self, baseline_samples, raw_traces=False):
+    def read_event(self, baseline_time, raw_traces=False):
         """Reads every active channel and returns the traces after the baseline has been subtracted and the polarity checked to make it positive-going. Optionally returns the traces before any processing. Takes the number of samples used to determine the baseline as an input.
 
             Args
             ----
-            baseline_samples : (int)
-                Number of samples used to calculate the baseline of a pulse at the start of the acquisition window. 
+            baseline_time : (int)
+                Length of time used (in ns) to calculate the baseline of a pulse at the start of the acquisition window. 
 
             raw_traces : (bool, optional)
                 Flag that determines if the traces before any processing should be returned to the user instead of the processed ones. Defaults to False.
@@ -68,6 +69,9 @@ class read_dat(object):
             time_stamp : (int)
                 Time in microseconds since the start of the acquisistion
         """
+        # Calculates number of samples needed to calculate the baseline
+        baseline_samples = baseline_time / self.ns_per_sample
+
         # Reads the preamble that sits at the front of each event
         preamble = np.frombuffer(self.input_file.read(self.preamble_size), dtype=np.uint32)
         if not preamble.any(): # Checks end of file
@@ -82,6 +86,9 @@ class read_dat(object):
         self.active_channels = np.argwhere(self.channel_sizes > 0).flatten()
 
         traces_raw = np.empty((len(self.active_channels), self.channel_sizes[self.active_channels[0]]))
+
+        trace_t = np.arange(0, len(traces_raw), self.ns_per_sample)
+
         # Gets the raw trace as it comes out of the detector. y-axis is in bits and x-axis is in samples
         for i in range(len(self.active_channels)):
             traces_raw[i] = np.array(np.frombuffer(self.input_file.read(self.channel_sizes[self.active_channels[i]]*2), dtype=np.uint16), dtype=int)
@@ -99,9 +106,9 @@ class read_dat(object):
                 traces[i] = trace_to_append
         
         if raw_traces:
-            return traces_raw, self.event_time_stamp
+            return traces_raw, trace_t, self.event_time_stamp
         else:
-            return traces, self.event_time_stamp
+            return traces, trace_t, self.event_time_stamp
 
 
     def calculate_integrals(self, trace, align_point, t_start, t_short, t_long):
@@ -116,13 +123,13 @@ class read_dat(object):
                 Sample number that the integration window will be determined relative to.
 
             t_start : (int)
-                Number of samples before the `align_point` where the integration window will start.
+                Time before the `align_point` where the integration window will start.
 
             t_short : (int)
-                Number of samples after the `align_point` that the short integration window will end.
+                Time after the `align_point` that the short integration window will end.
 
             t_long : (int)
-                Number of samples after the `align_point` that the long integration window will end.
+                Time after the `align_point` that the long integration window will end.
 
             Returns
             -------
@@ -131,8 +138,13 @@ class read_dat(object):
             L : (float)
                 Long integral
         """
-        short_int = np.sum(trace[int(align_point+t_start):int(align_point+t_short)])
-        long_int = np.sum(trace[int(align_point+t_start):int(align_point+t_long)])
+
+        samples_start = t_start / self.ns_per_sample
+        samples_short = t_short / self.ns_per_sample
+        samples_long = t_long / self.ns_per_sample
+
+        short_int = np.sum(trace[int(align_point+samples_start):int(align_point+samples_short)])
+        long_int = np.sum(trace[int(align_point+samples_start):int(align_point+samples_long)])
 
         return short_int, long_int
 
