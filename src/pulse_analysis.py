@@ -413,7 +413,7 @@ class read_dat(object):
                 for i in range(len(split)):
                     for j in range(len(split[i])):
                         writer.writerow(split[i][j])
-            print(f'Selections outputted to file: {self.filename[:-4]}_cuts.csv')
+            print(f'Selections outputted to file: {self.cuts_output_name}.csv')
 
         return
 
