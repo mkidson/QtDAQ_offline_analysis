@@ -181,7 +181,7 @@ class read_dat(object):
 
         The time between stop pulses (in samples) and height of the pulses (in bits) need to be supplied in order to best select the peaks in the stop pulse trace.
 
-        CFD parameters can also be supplied but will default to whatever I've found to be optimal in my work :)
+        CFD parameters can also be supplied but will default to whatever I've found to be optimal in my work.
 
             Args
             ----
@@ -211,13 +211,32 @@ class read_dat(object):
         peaks = find_peaks(tof_stop_trace, distance=stop_distance-50, height=stop_height-500)
 
         try:
-            tof_stop_trace_for_cfd = tof_stop_trace[peaks[0][-1]-50:peaks[0][-1]+50]
+            # Calculates the baseline for the stop pulse by looking between the peaks found above
+            tof_stop_baseline = np.mean(tof_stop_trace[peaks[0][0]+10:peaks[0][1]-10])
+
+            # Some logic that can be used to instead use the stop pulse which is closest
+            # peak_min_distance_index = peaks[0][np.where(np.abs(peaks[0] - trace_cfd_interp) == np.min(np.abs(peaks[0] - trace_cfd_interp)))[0][0]]
+
+            # Use the stop pulse which comes directly after the event pulse 
+            which_stop_pulse = np.where(peaks[0] > trace_cfd_interp)[0][0]
+
+            # Isolating the stop pulse so I can run CFD on it
+            tof_stop_trace_for_cfd = tof_stop_trace[peaks[0][which_stop_pulse]-50:peaks[0][which_stop_pulse]+50] - tof_stop_baseline
+
+            tof_stop_cfd_interp = self.cfd(tof_stop_trace_for_cfd, cfd_params[0], cfd_params[1], True)[2] + peaks[0][which_stop_pulse] -50
+            
+            # More logic for using the closest pulse rather than the next pulse
+            # tof_stop_trace_for_cfd = tof_stop_trace[peak_min_distance_index:peak_min_distance_index+50] - tof_stop_baseline
+            # tof_stop_cfd_interp = self.cfd(tof_stop_trace_for_cfd, cfd_params[0], cfd_params[1], True)[2] + peak_min_distance_index
+
+            # Calculating the distance
+            t_diff_samples = tof_stop_cfd_interp - trace_cfd_interp
+        
+        # Handles bad data
         except IndexError:
             return 0
-
-        tof_stop_cfd_interp = self.cfd(tof_stop_trace_for_cfd, cfd_params[0], cfd_params[1], True)[2] + peaks[0][-1] - 50
-
-        t_diff_samples = tof_stop_cfd_interp - trace_cfd_interp
+        except ValueError:
+            return 0
 
         return t_diff_samples
 
