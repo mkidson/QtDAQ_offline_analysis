@@ -111,8 +111,8 @@ class read_dat(object):
             return traces, trace_t, self.event_time_stamp
 
 
-    def calculate_integrals(self, trace, align_point, t_start, t_short, t_long):
-        """Calculates the short and long integrals of a user-supplied trace. Also supplied is the align point (usually determined with CFD), the start time (relative to the alignment point), and the two end times (also relative to the alignment point)
+    def calculate_integrals(self, trace, align_point, t_start, t_short, t_long, t_L):
+        """Calculates the pulse shape parameter and light output integral of a user-supplied trace. Also supplied is the align point (usually determined with CFD), the start time (relative to the alignment point), and the three end times (also relative to the alignment point).
 
             Args
             ----
@@ -131,22 +131,27 @@ class read_dat(object):
             t_long : (int)
                 Time after the `align_point` that the long integration window will end.
 
+            t_L : (int)
+                Time after the `align_point` that the L integration window will end.
+
             Returns
             -------
-            S : (float)
-                Short integral
             L : (float)
-                Long integral
+                Q_L
+            S : (float)
+                Pulse shape parameter
         """
 
         samples_start = t_start / self.ns_per_sample
         samples_short = t_short / self.ns_per_sample
         samples_long = t_long / self.ns_per_sample
+        samples_L = t_L / self.ns_per_sample
 
         short_int = np.sum(trace[int(align_point+samples_start):int(align_point+samples_short)])
         long_int = np.sum(trace[int(align_point+samples_start):int(align_point+samples_long)])
+        L_int = np.sum(trace[int(align_point+samples_start):int(align_point+samples_L)])
 
-        return short_int, long_int
+        return L_int, short_int/long_int
 
 
     def get_geometric_mean_trace(self, traces, align_points):
